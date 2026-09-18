@@ -1,275 +1,1115 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-<meta name="theme-color" content="#0b0f1a" />
-<title>Gomoku Arena · 五子棋 AI 评测台</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0f1a'/%3E%3Ccircle cx='11' cy='13' r='5' fill='%23222'/%3E%3Ccircle cx='21' cy='19' r='5' fill='%23eee'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="styles.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#262624">
+<title>弈衡 · 五子棋大模型评测台</title>
+<style>
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+  :root {
+    --bg:#262624; --panel:#323231; --panel2:#2b2b2a; --panel-border:#3d3d3c;
+    --text:#f0f0ee; --muted:#b8b8b3; --dim:#8f8f8a;
+    --accent:#d97757; --accent2:#c96242; --accent-soft:rgba(217,119,87,.13);
+    --ok:#8fbf7f; --danger:#e07a6e; --amber:#d9a441;
+    --radius:16px; --wood1:#9a6b42; --wood2:#6b4526;
+  }
+  html,body { margin:0; padding:0; }
+  body {
+    font-family: "Source Han Serif SC","Noto Serif SC","思源宋体","Source Han Serif CN","Songti SC","STSong","SimSun",serif;
+    background:
+      radial-gradient(1100px 520px at 12% -10%, rgba(217,119,87,.09), transparent 60%),
+      radial-gradient(900px 480px at 105% 8%, rgba(217,119,87,.05), transparent 55%),
+      linear-gradient(180deg,#292927 0%, #262624 55%, #232322 100%);
+    color: var(--text); min-height:100vh; font-size:14px; line-height:1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea, summary { font-family: inherit; font-size: inherit; color: inherit; }
+  button, .seg label, select { touch-action: manipulation; -webkit-user-select:none; user-select:none; }
+  button:focus, a:focus, select:focus, summary:focus { outline:none; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:8px; }
+  input[type=text],input[type=password],input[type=number],select { -webkit-user-select:text; user-select:text; }
+
+  .wrap { max-width: 1320px; margin: 0 auto; padding: 18px 16px 40px; }
+  header.top { display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .logo { width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg,#383837, #2e2e2d 60%, #383837); border:1px solid rgba(217,119,87,.4); display:flex; align-items:center; justify-content:center; box-shadow:0 0 22px rgba(217,119,87,.14) inset; }
+  .logo svg { width:24px; height:24px; }
+  .titles { flex:1; min-width:200px; }
+  .titles h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.5px; }
+  .titles h1 em { font-style:normal; color:var(--accent); }
+  .titles p { margin:2px 0 0; color:var(--muted); font-size:12.5px; }
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); background:var(--panel); border:1px solid var(--panel-border); padding:6px 12px; border-radius:999px; }
+  .badge .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 8px var(--ok); }
+
+  /* 分段控件 */
+  .seg { display:inline-flex; background:#232322; border:1px solid var(--panel-border); border-radius:12px; padding:3px; gap:2px; }
+  .seg label { position:relative; padding:7px 14px; border-radius:9px; cursor:pointer; color:var(--muted); font-size:13px; white-space:nowrap; transition:color .15s, background .15s; }
+  .seg label:hover { color:var(--text); }
+  .seg input { position:absolute; opacity:0; pointer-events:none; }
+  .seg input:checked + span { color:#fff; font-weight:600; }
+  .seg label:has(input:checked) { background:var(--accent); box-shadow:0 2px 12px rgba(217,119,87,.35); }
+
+  .layout { display:grid; grid-template-columns: 326px minmax(0,1fr) 296px; gap:16px; align-items:start; }
+  .card { background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius); padding:14px; box-shadow:0 10px 34px rgba(0,0,0,.28); }
+  .card h2 { margin:0 0 10px; font-size:14px; color:var(--muted); font-weight:600; letter-spacing:.4px; display:flex; align-items:center; gap:8px; }
+  .card h2 .glyph { width:18px; height:18px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; background:var(--accent-soft); color:var(--accent); }
+
+  .mode-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+
+  /* 模型配置块 */
+  .block { border:1px solid var(--panel-border); border-radius:12px; padding:10px 12px 12px; margin-bottom:12px; background:var(--panel2); }
+  .block-head { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-weight:600; font-size:13.5px; }
+  .block-head .stone { width:13px; height:13px; border-radius:50%; box-shadow:0 0 6px rgba(255,255,255,.15); }
+  .stone.black { background:radial-gradient(circle at 35% 30%,#4b4b48,#262625 55%,#141413); }
+  .stone.white { background:radial-gradient(circle at 35% 30%,#fff,#e6e6e2 60%,#b8b8b3); }
+  .stone.accent { background:radial-gradient(circle at 35% 30%,#f0a287,#d97757); }
+  .block .field { margin-bottom:8px; }
+  .block label.lbl { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .block input[type=text], .block input[type=password], .block select { width:100%; background:#232322; border:1px solid var(--panel-border); border-radius:9px; padding:8px 10px; font-size:13px; color:var(--text); transition:border-color .15s; }
+  .block input:focus, .block select:focus { border-color:var(--accent); outline:none; }
+  .key-row { display:flex; gap:6px; }
+  .key-row input { flex:1; }
+  .key-row button { border:1px solid var(--panel-border); background:rgba(255,255,255,.05); border-radius:9px; padding:0 10px; cursor:pointer; color:var(--muted); font-size:12px; }
+  .key-row button:hover { color:var(--text); background:rgba(255,255,255,.1); }
+  .block .note { font-size:11.5px; color:var(--dim); margin-top:2px; line-height:1.5; }
+  .block details { margin-top:6px; }
+  .block summary { font-size:12px; color:var(--dim); cursor:pointer; }
+  .block summary:hover { color:var(--muted); }
+  .adv { margin-top:8px; padding-top:8px; border-top:1px dashed rgba(255,255,255,.1); }
+  .adv .row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .adv .row label { flex:0 0 64px; font-size:12px; color:var(--muted); }
+  .adv input[type=range] { flex:1; accent-color: var(--accent); }
+  .adv .val { width:42px; text-align:right; font-size:12px; color:var(--accent); }
+  .field.hidden { display:none; }
+
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:11px; padding:9px 16px; font-size:13.5px; cursor:pointer; border:1px solid var(--panel-border); background:rgba(255,255,255,.05); color:var(--text); transition:background .15s, transform .05s, box-shadow .15s; }
+  .btn:hover { background:rgba(255,255,255,.1); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background:var(--accent); border:none; color:#fff; font-weight:700; box-shadow:0 4px 16px rgba(217,119,87,.3); }
+  .btn.primary:hover { background:var(--accent2); box-shadow:0 6px 22px rgba(217,119,87,.4); }
+  .btn.ghost { background:transparent; }
+  .btn.danger { color:var(--danger); border-color:rgba(224,122,110,.35); }
+  .btn.sm { padding:6px 11px; font-size:12.5px; border-radius:9px; }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* 棋盘区 */
+  .board-card { position:relative; }
+  .statusbar { display:flex; align-items:center; gap:10px; padding:8px 6px 12px; flex-wrap:wrap; }
+  .turn { display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:14px; }
+  .turn .stone { width:15px; height:15px; }
+  .msg { flex:1; min-width:120px; color:var(--muted); font-size:13px; }
+  .msg .spin { display:inline-flex; gap:3px; margin-left:2px; vertical-align:middle; }
+  .msg .spin i { width:5px; height:5px; border-radius:50%; background:var(--accent); animation:blink 1s infinite; }
+  .msg .spin i:nth-child(2){ animation-delay:.18s; } .msg .spin i:nth-child(3){ animation-delay:.36s; }
+  @keyframes blink { 0%,100%{opacity:.25} 50%{opacity:1} }
+  .meta { color:var(--dim); font-size:12px; display:inline-flex; gap:10px; align-items:center; }
+  .meta b { color:var(--muted); font-weight:600; }
+  .score-pill { background:var(--accent-soft); color:var(--accent); padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .controls { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .board-holder { position:relative; width:100%; display:flex; justify-content:center; }
+  #boardCanvas { display:block; border-radius:14px; box-shadow:0 18px 50px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.05); touch-action: manipulation; cursor:pointer; }
+
+  /* 侧栏 */
+  .tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .tabs button { flex:1; padding:7px 0; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--muted); cursor:pointer; font-size:13px; }
+  .tabs button.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .panel-body { min-height: 320px; max-height: 62vh; overflow:auto; }
+  .panel-body::-webkit-scrollbar { width:6px; } .panel-body::-webkit-scrollbar-thumb { background:rgba(255,255,255,.18); border-radius:3px; }
+  .log-entry { display:flex; gap:8px; align-items:center; padding:5px 6px; border-radius:7px; font-size:12.5px; color:var(--muted); }
+  .log-entry:nth-child(odd){ background:rgba(255,255,255,.04); }
+  .log-entry .no { color:var(--dim); width:26px; flex:0 0 26px; text-align:right; }
+  .log-entry .st { font-weight:700; }
+  .log-entry .cd { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  .log-entry .nm { margin-left:auto; color:var(--dim); font-size:11.5px; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stat-card { border:1px solid var(--panel-border); border-radius:12px; padding:10px 12px; margin-bottom:10px; background:var(--panel2); }
+  .stat-card .hd { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-weight:600; font-size:13px; }
+  .stat-card .wld { display:flex; gap:14px; margin-bottom:6px; }
+  .stat-card .wld div { font-size:12px; color:var(--muted); }
+  .stat-card .wld b { font-size:17px; color:var(--text); margin-right:3px; font-weight:700; }
+  .stat-card .wld .w b{ color:var(--ok);} .stat-card .wld .l b{ color:var(--danger);} .stat-card .wld .d b{ color:var(--amber);}
+  .stat-card .kv { display:grid; grid-template-columns:1fr 1fr; gap:3px 12px; font-size:11.5px; color:var(--dim); }
+  .stat-card .kv b { color:var(--muted); font-weight:600; }
+  .empty { color:var(--dim); text-align:center; padding:34px 10px; font-size:12.5px; }
+  .hint { font-size:11.5px; color:var(--dim); margin-top:10px; line-height:1.6; }
+
+  /* 胜负弹层 */
+  #overlay { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(18,18,17,.72); backdrop-filter: blur(6px); z-index:50; padding:18px; }
+  #overlay.show { display:flex; }
+  .ov-card { width:min(430px,100%); background:linear-gradient(180deg,#353534,#2e2e2d); border:1px solid rgba(217,119,87,.35); border-radius:22px; padding:28px 24px; text-align:center; box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 40px rgba(217,119,87,.12); animation:pop .28s ease-out; }
+  @keyframes pop { from{ transform:scale(.9); opacity:0;} to{ transform:scale(1); opacity:1;} }
+  .ov-badge { width:64px; height:64px; border-radius:50%; margin:0 auto 14px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  .ov-badge.black { background:radial-gradient(circle at 35% 30%,#4b4b48,#262625 45%,#141413); }
+  .ov-badge.white { background:radial-gradient(circle at 35% 30%,#fff,#e6e6e2 60%,#b8b8b3); }
+  .ov-badge.draw { background:linear-gradient(135deg,#4a4a48,#3a3a38); }
+  .ov-title { font-size:24px; font-weight:800; margin:4px 0 6px; letter-spacing:1px; }
+  .ov-title.win-black { color:#e8e8e6; text-shadow:0 0 18px rgba(230,230,228,.35); }
+  .ov-title.win-white { color:#fff; text-shadow:0 0 18px rgba(255,255,255,.35); }
+  .ov-sub { color:var(--muted); font-size:13.5px; margin-bottom:14px; line-height:1.7; }
+  .ov-series { display:inline-block; background:var(--accent-soft); color:var(--accent); padding:5px 14px; border-radius:999px; font-size:13px; font-weight:700; margin-bottom:14px; }
+  .ov-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:14px 0 18px; }
+  .ov-stats .it { border:1px solid var(--panel-border); border-radius:11px; padding:8px 10px; text-align:left; font-size:11.5px; color:var(--dim); }
+  .ov-stats .it b { display:block; font-size:14px; color:var(--text); margin-bottom:2px; }
+  .ov-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+
+  /* Toast */
+  #toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:80; display:flex; flex-direction:column; gap:8px; align-items:center; width:min(92vw,520px); pointer-events:none; }
+  .toast { background:#353534; border:1px solid var(--panel-border); border-left:3px solid var(--accent); border-radius:10px; padding:9px 14px; font-size:12.5px; color:var(--text); box-shadow:0 10px 30px rgba(0,0,0,.4); animation:slidein .2s ease-out; max-width:100%; }
+  .toast.err { border-left-color:var(--danger); }
+  .toast.warn { border-left-color:var(--amber); }
+  @keyframes slidein { from{ transform:translateY(-8px); opacity:0;} to{ transform:none; opacity:1;} }
+
+  footer { margin-top:26px; color:var(--dim); font-size:11.5px; text-align:center; line-height:1.8; }
+
+  @media (max-width:1024px) {
+    .layout { grid-template-columns:1fr; }
+    .side-col { order:3; }
+    .board-col { order:2; }
+    .cfg-col { order:1; }
+    .panel-body { max-height: 340px; }
+  }
+  @media (max-width:520px) {
+    .wrap { padding:12px 10px 32px; }
+    .titles h1 { font-size:17px; }
+    .btn { padding:9px 12px; }
+    .block { padding:10px; }
+  }
+</style>
 </head>
 <body>
-<div class="bg-glow"></div>
-
-<header class="topbar">
-  <div class="brand">
+<div class="wrap">
+  <header class="top">
     <div class="logo">
-      <span class="stone s-b"></span><span class="stone s-w"></span>
+      <svg viewBox="0 0 32 32" fill="none"><rect x="2" y="2" width="28" height="28" rx="7" stroke="#d97757" stroke-opacity=".55"/><path d="M8 8 L24 24 M24 8 L8 24 M8 16 H24 M16 8 V24" stroke="#d97757" stroke-opacity=".4"/><circle cx="16" cy="16" r="5.2" fill="url(#g)"/><defs><radialGradient id="g" cx=".35" cy=".3"><stop offset="0" stop-color="#f0a287"/><stop offset="1" stop-color="#c96242"/></radialGradient></defs></svg>
     </div>
-    <div class="brand-text">
-      <h1>Gomoku Arena</h1>
-      <p>五子棋 AI 模型在线评测台</p>
+    <div class="titles">
+      <h1>弈衡 <em>·</em> 五子棋大模型评测台</h1>
+      <p>人机对弈 · 双模型对战 · 任意语言模型均可接入</p>
+    </div>
+    <span class="badge"><span class="dot"></span>浏览器直连 · Key 仅存本机</span>
+  </header>
+
+  <div class="mode-row">
+    <div class="seg" id="modeSeg">
+      <label><input type="radio" name="mode" value="human" checked><span>人机对战</span></label>
+      <label><input type="radio" name="mode" value="battle"><span>模型对战</span></label>
+    </div>
+    <button class="btn sm" id="clearStats">清空统计</button>
+  </div>
+
+  <div class="layout">
+    <!-- 左：配置 -->
+    <div class="cfg-col">
+      <div class="card" id="humanCfgCard">
+        <h2><span class="glyph">⚙</span> 对局配置</h2>
+        <div class="block">
+          <div class="block-head"><span class="stone accent"></span> 你的执子</div>
+          <div class="seg" id="colorSeg" style="width:100%">
+            <label style="flex:1; text-align:center;"><input type="radio" name="humanColor" value="1" checked><span>执黑先行</span></label>
+            <label style="flex:1; text-align:center;"><input type="radio" name="humanColor" value="2"><span>执白后行</span></label>
+          </div>
+        </div>
+        <div id="cfgHumanAI"></div>
+      </div>
+      <div class="card" id="battleCfgCard" style="display:none">
+        <h2><span class="glyph">⚙</span> 对战配置</h2>
+        <div id="cfgBattleA"></div>
+        <div id="cfgBattleB"></div>
+        <div class="block">
+          <div class="block-head"><span class="stone accent"></span> 赛制</div>
+          <div class="seg" id="formatSeg" style="width:100%">
+            <label style="flex:1; text-align:center;"><input type="radio" name="format" value="single" checked><span>单局定胜负</span></label>
+            <label style="flex:1; text-align:center;"><input type="radio" name="format" value="bo3"><span>三局两胜</span></label>
+          </div>
+        </div>
+        <div class="block">
+          <div class="block-head"><span class="stone accent"></span> 观战速度</div>
+          <div class="seg" id="speedSeg" style="width:100%">
+            <label style="flex:1; text-align:center;"><input type="radio" name="speed" value="900"><span>慢</span></label>
+            <label style="flex:1; text-align:center;"><input type="radio" name="speed" value="600" checked><span>标准</span></label>
+            <label style="flex:1; text-align:center;"><input type="radio" name="speed" value="250"><span>快</span></label>
+          </div>
+        </div>
+        <button class="btn primary" id="startBattle" style="width:100%">开始对战</button>
+        <div class="hint">模型每回合收到文本棋盘与坐标协议（如 H8），输出经容错解析与自动重试；无效着法会计入统计并改用随机着法兜底。请求由你的浏览器直接发往模型厂商。</div>
+      </div>
+    </div>
+
+    <!-- 中：棋盘 -->
+    <div class="board-col">
+      <div class="card board-card">
+        <div class="statusbar">
+          <span class="turn"><span class="stone" id="turnStone"></span><span id="turnText">准备中</span></span>
+          <span class="msg" id="msg"></span>
+          <span class="meta" id="meta"></span>
+        </div>
+        <div class="board-holder"><canvas id="boardCanvas"></canvas></div>
+        <div class="controls">
+          <button class="btn sm" id="btnNew">新开局</button>
+          <button class="btn sm" id="btnUndo" style="display:none">悔棋</button>
+          <button class="btn sm" id="btnPause" style="display:none">暂停</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右：日志 / 统计 -->
+    <div class="side-col">
+      <div class="card">
+        <div class="tabs"><button class="on" data-tab="log">对局记录</button><button data-tab="stats">评测统计</button></div>
+        <div class="panel-body" id="tabLog"></div>
+        <div class="panel-body" id="tabStats" style="display:none"></div>
+      </div>
     </div>
   </div>
-  <nav class="tabs" role="tablist">
-    <button class="tab is-active" data-tab="pve" role="tab">人机对战</button>
-    <button class="tab" data-tab="pvp" role="tab">模型对战</button>
-    <button class="tab" data-tab="guide" role="tab">接入说明</button>
-  </nav>
-</header>
 
-<main class="layout">
+  <footer>
+    纯静态网页：模型请求由你的浏览器直接发送到对应模型厂商，API Key 仅保存在你自己的浏览器本地（localStorage），不上传任何服务器。<br>
+    内置「DemoBot」无需密钥即可体验完整流程；支持任意 OpenAI 兼容 / Anthropic / Gemini 接口，也可通过「自定义」接入私有模型。部署为 HTTPS 页面时，Ollama（http://localhost）会被浏览器拦截，仅本机直接访问页面时可用。
+  </footer>
+</div>
 
-  <!-- ============ 棋盘区 ============ -->
-  <section class="board-pane card">
-    <div class="board-head">
-      <div class="turn-chip" id="turnChip">
-        <span class="dot" id="turnDot"></span>
-        <span id="turnText">准备开始</span>
-      </div>
-      <div class="scoreboard" id="scoreboard">
-        <div class="score-item"><span class="tag tag-a" id="scoreAName">先手</span><b id="scoreA">0</b></div>
-        <span class="score-sep">:</span>
-        <div class="score-item"><span class="tag tag-b" id="scoreBName">后手</span><b id="scoreB">0</b></div>
-      </div>
-    </div>
+<div id="overlay">
+  <div class="ov-card">
+    <div class="ov-badge" id="ovBadge"></div>
+    <div class="ov-title" id="ovTitle">—</div>
+    <div class="ov-sub" id="ovSub"></div>
+    <div class="ov-series" id="ovSeries" style="display:none"></div>
+    <div class="ov-stats" id="ovStats"></div>
+    <div class="ov-actions" id="ovActions"></div>
+  </div>
+</div>
 
-    <div class="board-wrap">
-      <canvas id="board" aria-label="五子棋棋盘"></canvas>
-      <div class="board-overlay" id="boardOverlay">
-        <div class="overlay-card">
-          <div class="overlay-icon" id="overlayIcon">🏆</div>
-          <h2 id="overlayTitle">胜负已分</h2>
-          <p id="overlayDesc">黑棋获胜</p>
-          <div class="overlay-actions">
-            <button class="btn btn-primary" id="overlayPrimary">再来一局</button>
-            <button class="btn btn-ghost" id="overlaySecondary">返回设置</button>
-          </div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 供应商预设（2026-09 调研整理，模型名可在输入框修改） ================= */
+const PROVIDERS = [
+  { id:'demo', name:'内置演示模型（DemoBot）', adapter:'demo', baseUrl:'', apiKeyLabel:'无需密钥', models:[], defaultModel:'', note:'无需密钥的本地启发式棋手，适合先体验完整对局流程。' },
+  { id:'doubao', name:'豆包 · 火山方舟', adapter:'openai', baseUrl:'https://ark.cn-beijing.volces.com/api/v3', apiKeyLabel:'方舟 API Key（ARK_API_KEY）', models:['doubao-seed-2-1-pro-260915','doubao-seed-2.0-pro','doubao-seed-2.0-lite','doubao-seed-1-6-flash-250615'], defaultModel:'doubao-seed-2-1-pro-260915', note:'模型 ID 以火山方舟控制台为准；深度思考模型较慢，评测对弈建议用 flash 系列。' },
+  { id:'deepseek', name:'DeepSeek', adapter:'openai', baseUrl:'https://api.deepseek.com/v1', apiKeyLabel:'DeepSeek API Key', models:['deepseek-v4-pro','deepseek-v4-flash','deepseek-chat','deepseek-reasoner'], defaultModel:'deepseek-v4-flash', note:'deepseek-chat / reasoner 为兼容旧名，分别对应 v4-flash 非思考 / 思考模式。' },
+  { id:'openai', name:'OpenAI', adapter:'openai', baseUrl:'https://api.openai.com/v1', apiKeyLabel:'OpenAI API Key（sk-...）', models:['gpt-5.6-sol','gpt-5.6-terra','gpt-5.6-luna','gpt-5.5','gpt-5.5-pro','gpt-5.4','gpt-5.4-pro','gpt-5-thinking','gpt-5-main'], defaultModel:'gpt-5.6-sol', note:'模型 ID 以 OpenAI 官方文档为准，可手动修改。' },
+  { id:'anthropic', name:'Anthropic Claude', adapter:'anthropic', baseUrl:'https://api.anthropic.com', apiKeyLabel:'Anthropic API Key（sk-ant-...）', models:['claude-fable-5','claude-opus-4-8','claude-sonnet-4-6','claude-haiku-4-5'], defaultModel:'claude-sonnet-4-6', note:'浏览器直连需该 Key 已开通 CORS；如被拦截可改用 OpenAI 兼容中转。' },
+  { id:'gemini', name:'Google Gemini', adapter:'gemini', baseUrl:'https://generativelanguage.googleapis.com', apiKeyLabel:'Gemini API Key（AI Studio）', models:['gemini-3.8-flash','gemini-3.6-flash','gemini-3-pro','gemini-2.5-pro','gemini-2.5-flash'], defaultModel:'gemini-3.8-flash', note:'' },
+  { id:'kimi', name:'Kimi · 月之暗面', adapter:'openai', baseUrl:'https://api.moonshot.cn/v1', apiKeyLabel:'Kimi API Key', models:['kimi-k3','kimi-k2.7-code','kimi-k2.7-code-highspeed','kimi-k2.6'], defaultModel:'kimi-k3', note:'' },
+  { id:'glm', name:'智谱 GLM', adapter:'openai', baseUrl:'https://open.bigmodel.cn/api/paas/v4', apiKeyLabel:'智谱 API Key', models:['glm-5.3','glm-5.3-flash','glm-5.2','glm-4.6'], defaultModel:'glm-5.3-flash', note:'' },
+  { id:'qwen', name:'通义千问 Qwen', adapter:'openai', baseUrl:'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKeyLabel:'DashScope API Key（sk-...）', models:['qwen-max','qwen-plus','qwen-turbo','qwen3-235b-a22b-instruct'], defaultModel:'qwen-max', note:'阿里云百炼 DashScope 兼容模式。' },
+  { id:'ernie', name:'百度文心 ERNIE', adapter:'openai', baseUrl:'https://qianfan.baidubce.com/v2', apiKeyLabel:'千帆 API Key', models:['ernie-4.5-turbo-8k','ernie-4.5-8k-preview'], defaultModel:'ernie-4.5-turbo-8k', note:'' },
+  { id:'minimax', name:'MiniMax', adapter:'openai', baseUrl:'https://api.minimax.chat/v1', apiKeyLabel:'MiniMax API Key', models:['MiniMax-M2.7','MiniMax-M2','abab6.5s'], defaultModel:'MiniMax-M2.7', note:'' },
+  { id:'siliconflow', name:'SiliconFlow 硅基流动', adapter:'openai', baseUrl:'https://api.siliconflow.cn/v1', apiKeyLabel:'SiliconFlow API Key（sk-...）', models:['deepseek-ai/DeepSeek-V3.2','Qwen/Qwen3-235B-A22B-Instruct'], defaultModel:'deepseek-ai/DeepSeek-V3.2', note:'聚合平台，模型名形如「厂商/模型」。' },
+  { id:'openrouter', name:'OpenRouter（聚合）', adapter:'openai', baseUrl:'https://openrouter.ai/api/v1', apiKeyLabel:'OpenRouter API Key', models:['openai/gpt-5.5','anthropic/claude-opus-4.8','google/gemini-3-flash'], defaultModel:'openai/gpt-5.5', note:'聚合平台，模型 slug 以 OpenRouter 页面为准。' },
+  { id:'ollama', name:'Ollama（本地）', adapter:'openai', baseUrl:'http://localhost:11434/v1', apiKeyLabel:'任意值（Ollama 不校验）', models:['qwen3:8b','llama3.3:70b','deepseek-r1:14b'], defaultModel:'qwen3:8b', note:'仅在你本机直接访问页面时可用（HTTPS 页面访问 localhost 会被浏览器拦截）。' },
+  { id:'custom', name:'自定义（OpenAI 兼容）', adapter:'openai', baseUrl:'', apiKeyLabel:'API Key', models:[], defaultModel:'', note:'填入任意 OpenAI 兼容的 Base URL（如中转站、私有部署），模型名手动填写。' },
+];
+const P_MAP = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
+
+/* ================= 工具 ================= */
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SIZE = 15;
+const COLS = Array.from({length:SIZE},(_,i)=>String.fromCharCode(65+i));
+function coordLabel(r,c){ return COLS[c] + (r+1); }
+function emptyBoard(){ return Array.from({length:SIZE},()=>new Array(SIZE).fill(0)); }
+function buildBoardFromMoves(moves){ const b = emptyBoard(); (moves||[]).forEach(m=>{ if(b[m.r]&&b[m.r][m.c]===0) b[m.r][m.c]=m.p; }); return b; }
+function checkWinAt(board, r, c, p){
+  if(!board[r] || board[r][c]!==p) return false;
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(const [dr,dc] of dirs){
+    let cnt=1;
+    for(let s=-1;s<=1;s+=2){ let nr=r+dr*s, nc=c+dc*s;
+      while(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&board[nr][nc]===p){cnt++;nr+=dr*s;nc+=dc*s;} }
+    if(cnt>=5) return true;
+  }
+  return false;
+}
+function randomLocalMove(board){
+  const legal=[];
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(board[r][c]===0)legal.push({r,c});
+  return legal[Math.floor(Math.random()*legal.length)] || {r:7,c:7};
+}
+
+/* ================= 内置演示模型（启发式棋手） ================= */
+function lineScore(board, r, c, p){
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  let total=0;
+  for(const [dr,dc] of dirs){
+    let cnt=1, open=0;
+    for(const s of [-1,1]){
+      let nr=r+dr*s, nc=c+dc*s;
+      while(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&board[nr][nc]===p){cnt++;nr+=dr*s;nc+=dc*s;}
+      if(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&board[nr][nc]===0) open++;
+    }
+    if(cnt>=5) total+=1e7;
+    else if(cnt===4) total+= open===2?1e6 : open===1?1e4 : 0;
+    else if(cnt===3) total+= open===2?8000 : open===1?400 : 0;
+    else if(cnt===2) total+= open===2?200 : open===1?20 : 0;
+    else if(cnt===1) total+= open===2?10 : open===1?2 : 0;
+  }
+  return total;
+}
+function demoBotMove(board, player){
+  const opp = player===1?2:1;
+  let best=null, bestScore=-Infinity;
+  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++){
+    if(board[r][c]!==0) continue;
+    const attack = lineScore(board,r,c,player);
+    const defend = lineScore(board,r,c,opp)*0.85;
+    const center = (7-Math.abs(r-7))*0.5 + (7-Math.abs(c-7))*0.5;
+    const score = attack + defend + center + Math.random()*0.4;
+    if(score>bestScore){ bestScore=score; best={r,c}; }
+  }
+  if(!best) return {r:7,c:7};
+  return best;
+}
+
+/* ================= 提示词构建（移植自服务端 lib/prompt.js） ================= */
+function boardDiagram(board){
+  const lines = [];
+  const header = '    ' + COLS.join(' ');
+  lines.push(header);
+  const sym = { 0:'·', 1:'●', 2:'○' };
+  for(let r=0;r<SIZE;r++){
+    let row = String(r+1).padStart(2,' ') + '  ';
+    for(let c=0;c<SIZE;c++) row += sym[board[r][c]] + ' ';
+    lines.push(row);
+  }
+  return lines.join('\n');
+}
+function buildMessagesBrowser({ moves, next, attempt, lastRaw, lastError }){
+  const board = buildBoardFromMoves(moves);
+  const colorName = next===1?'黑':'白';
+  const stoneSym = next===1?'●':'○';
+  const system = [
+    '你是一个五子棋对弈引擎，正在参加一场 15×15 棋盘上的评测对局。',
+    '规则：黑白双方轮流在空白交叉点落子，先连成五子（横/竖/斜均可）的一方获胜。',
+    '',
+    `你执${colorName}棋（${stoneSym}）。每回合你会收到完整棋盘状态，请给出你这一手的落子坐标。`,
+    '',
+    '输出要求（务必严格遵守）：',
+    '1. 只输出一个坐标，格式为「列字母 + 行数字」，例如 H8。',
+    '2. 列用大写字母 A–O（A 为最左列），行用数字 1–15（1 为最上行）。',
+    '3. 只能落在空白交叉点，不能落在已有棋子的位置。',
+    '4. 不要输出任何解释、思考过程、棋谱编号、引号或多余文字。输出不合规将被判为无效着法。',
+  ].join('\n');
+  const user = [
+    `第 ${moves.length + 1} 手，轮到你（${colorName}，${stoneSym}）落子。`,
+    '棋盘状态（●=黑，○=白，·=空）：',
+    '```',
+    boardDiagram(board),
+    '```',
+    moves.length
+      ? `已有落子：${moves.map((m,i)=>`${i+1}. ${coordLabel(m.r,m.c)} ${m.p===1?'●':'○'}`).join('，')}`
+      : '棋盘为空，你是先手。',
+    '请只输出你这一手的坐标（例如 H8）。',
+  ].join('\n');
+  const messages = [
+    { role:'system', content: system },
+    { role:'user', content: user },
+  ];
+  if(attempt > 1){
+    messages.push({ role:'user', content:`你上一次的输出「${String(lastRaw||'').slice(0,100)}」无效（${lastError||'格式错误'}）。请只输出一个空白交叉点的坐标，格式如 H8，不要输出任何其他内容。` });
+  }
+  return messages;
+}
+
+/* ================= 落子解析（移植自服务端 lib/parse.js） ================= */
+function norm(s){
+  let t = String(s == null ? '' : s);
+  t = t.replace(/[\uFF21-\uFF3A]/g, (ch)=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  t = t.replace(/[\uFF41-\uFF5A]/g, (ch)=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  t = t.replace(/[\uFF10-\uFF19]/g, (ch)=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
+  t = t.replace(/[\uFF0C\u3001\uFF1B]/g, ',');
+  t = t.replace(/[\uFF08\uFF09]/g, ' ');
+  t = t.replace(/\u3000/g, ' ');
+  t = t.replace(/```/g, '');
+  t = t.replace(/^\s*[a-zA-Z]+\s*$/gm, '');
+  return t;
+}
+function inRange1(r,c){ return r>=1 && r<=SIZE && c>=1 && c<=SIZE; }
+function inRange0(r,c){ return r>=0 && r<SIZE && c>=0 && c<SIZE; }
+function tryJson(text){
+  let obj = null;
+  const brace = text.match(/\{[\s\S]*\}/);
+  const bracket = text.match(/\[[\s\S]*\]/);
+  const raw = brace ? brace[0] : bracket ? bracket[0] : null;
+  if(raw){
+    try{ obj = JSON.parse(raw); }
+    catch(e1){ try{ obj = JSON.parse(raw.replace(/'/g,'"')); }catch(e2){ obj = null; } }
+  }
+  if(obj===null || typeof obj!=='object') return null;
+  if(typeof obj.move==='string' && obj.move.trim()) return parseMoveBrowser(obj.move);
+  if(typeof obj.position==='string' && obj.position.trim()) return parseMoveBrowser(obj.position);
+  if(obj.row!==undefined && obj.row!==null && obj.col!==undefined && obj.col!==null){
+    const r=Number(obj.row), c=Number(obj.col);
+    if(inRange1(r,c)) return { ok:true, r:r-1, c:c-1, format:'json-row-col' };
+    return { ok:false, reason:`坐标(${r},${c})超出 1-${SIZE} 范围` };
+  }
+  if(obj.r!==undefined && obj.r!==null && obj.c!==undefined && obj.c!==null){
+    const r=Number(obj.r), c=Number(obj.c);
+    if(inRange1(r,c)) return { ok:true, r:r-1, c:c-1, format:'json-r-c' };
+    return { ok:false, reason:`坐标(${r},${c})超出 1-${SIZE} 范围` };
+  }
+  if(obj.x!==undefined && obj.x!==null && obj.y!==undefined && obj.y!==null){
+    const c=Number(obj.x), r=Number(obj.y);
+    if(inRange0(r,c)) return { ok:true, r, c, format:'json-x-y' };
+    return { ok:false, reason:`坐标(x=${c},y=${r})超出 0-${SIZE-1} 范围` };
+  }
+  if(Array.isArray(obj) && obj.length>=2 && typeof obj[0]!=='object'){
+    const r=Number(obj[0]), c=Number(obj[1]);
+    if(inRange0(r,c)) return { ok:true, r, c, format:'json-array' };
+    return { ok:false, reason:`坐标[${r},${c}]超出 0-${SIZE-1} 范围` };
+  }
+  return null;
+}
+function parseMoveBrowser(raw){
+  const text = norm(raw).trim();
+  if(!text) return { ok:false, reason:'模型未输出任何内容' };
+  const j = tryJson(text);
+  if(j) return j;
+  const m2 = text.match(/([a-o])\s*[-–—~]?\s*(\d{1,2})/i);
+  if(m2){
+    const c = m2[1].toLowerCase().charCodeAt(0)-97;
+    const r = parseInt(m2[2],10);
+    if(r>=1 && r<=SIZE && c>=0 && c<SIZE) return { ok:true, r:r-1, c, format:'letter-number' };
+    return { ok:false, reason:`坐标 ${m2[0]} 超出范围（列 A-${String.fromCharCode(64+SIZE)}，行 1-${SIZE}）` };
+  }
+  const m3 = text.match(/第?\s*(\d{1,2})\s*行\s*第?\s*(\d{1,2})\s*列/);
+  if(m3){
+    const r=parseInt(m3[1],10), c=parseInt(m3[2],10);
+    if(inRange1(r,c)) return { ok:true, r:r-1, c:c-1, format:'zh-行列' };
+    return { ok:false, reason:`坐标(${r},${c})超出 1-${SIZE} 范围` };
+  }
+  const m4 = text.match(/(\d{1,2})\s*[,，x×X\s]\s*(\d{1,2})/);
+  if(m4){
+    const r=parseInt(m4[1],10), c=parseInt(m4[2],10);
+    if(inRange1(r,c)) return { ok:true, r:r-1, c:c-1, format:'numbers' };
+    return { ok:false, reason:`坐标(${r},${c})超出 1-${SIZE} 范围` };
+  }
+  return { ok:false, reason:'未识别出有效坐标（期望如 H8 或 8,8）' };
+}
+
+/* ================= 浏览器直连模型适配器 ================= */
+async function httpJson(url, opts, timeoutMs){
+  const ac = new AbortController();
+  const timer = setTimeout(()=>ac.abort(), timeoutMs || 60000);
+  try{
+    const res = await fetch(url, Object.assign({}, opts, { signal: ac.signal }));
+    const text = await res.text();
+    let data = null;
+    try{ data = JSON.parse(text); }catch(e){ data = null; }
+    if(!res.ok){
+      const msg = (data && data.error) ? (typeof data.error==='string' ? data.error : (data.error.message || JSON.stringify(data.error))) : (data && data.message) || ('HTTP ' + res.status);
+      const err = new Error(String(msg).slice(0,300));
+      err.status = res.status; err.data = data;
+      throw err;
+    }
+    return data;
+  } finally { clearTimeout(timer); }
+}
+function openaiBody(cfg, messages, temperature){
+  const body = { model: cfg.model, messages };
+  if(temperature !== undefined) body.temperature = temperature;
+  return body;
+}
+async function callModel(cfg, messages, timeoutMs){
+  const prov = P_MAP[cfg.providerId];
+  const adapter = (prov && prov.adapter) || cfg.adapter || 'openai';
+  if(adapter==='anthropic'){
+    const base = (cfg.baseUrl || 'https://api.anthropic.com').replace(/\/+$/,'');
+    const data = await httpJson(base + '/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-api-key': cfg.apiKey, 'anthropic-version':'2023-06-01' },
+      body: JSON.stringify({
+        model: cfg.model,
+        max_tokens: 500,
+        system: messages[0].content,
+        messages: messages.slice(1).map(m=>({ role: m.role, content: m.content })),
+        temperature: cfg.temperature,
+      })
+    }, timeoutMs);
+    return ((data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''));
+  }
+  if(adapter==='gemini'){
+    const base = (cfg.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/+$/,'');
+    const url = `${base}/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
+    const data = await httpJson(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts:[{ text: messages[0].content }] },
+        contents: messages.slice(1).map(m=>({ role: m.role==='assistant'?'model':'user', parts:[{ text: m.content }] })),
+        generationConfig: { temperature: cfg.temperature, maxOutputTokens: 500 },
+      })
+    }, timeoutMs);
+    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+    return parts.map(x=>x.text||'').join('');
+  }
+  // openai 兼容（默认）
+  const base = (cfg.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/,'');
+  const url = base + '/chat/completions';
+  const headers = { 'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.apiKey };
+  try{
+    const data = await httpJson(url, {
+      method:'POST', headers, body: JSON.stringify(openaiBody(cfg, messages, cfg.temperature))
+    }, timeoutMs);
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  }catch(e){
+    // 部分推理模型不接受 temperature → 去掉 temperature 重试一次
+    if(e.data && /temperature/i.test(JSON.stringify(e.data.error || e.data))){
+      const data = await httpJson(url, {
+        method:'POST', headers, body: JSON.stringify(openaiBody(cfg, messages, undefined))
+      }, timeoutMs);
+      return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    }
+    throw e;
+  }
+}
+
+/* ================= 单回合对局编排（移植自服务端 lib/core.js） ================= */
+async function getMoveBrowser({ moves, next, config }){
+  const maxAttempts = 3, timeoutMs = 60000;
+  moves = Array.isArray(moves) ? moves : [];
+  if(moves.length >= SIZE*SIZE) return { ok:true, move: randomLocalMove(emptyBoard()), fallback:true, fallbackReason:'board-full', attempts:0, latencyMs:0 };
+  const board = buildBoardFromMoves(moves);
+  let invalid = null, attempts = 0, apiErrors = 0;
+  for(let i=0;i<maxAttempts;i++){
+    attempts = i+1;
+    const messages = buildMessagesBrowser({ moves, next, attempt: attempts, lastRaw: invalid && invalid.raw, lastError: invalid && invalid.reason });
+    const t0 = performance.now();
+    let text = null, apiError = null;
+    try{
+      text = await callModel(config, messages, timeoutMs);
+    }catch(e){
+      apiError = e;
+    }
+    if(apiError){
+      apiErrors++;
+      if(apiErrors>=2){
+        return { ok:true, move: randomLocalMove(board), fallback:true, fallbackReason:'api-error', error: String(apiError && apiError.message || apiError), errorStatus: apiError && apiError.status, attempts, latencyMs: Math.round(performance.now()-t0) };
+      }
+      continue;
+    }
+    const latencyMs = Math.round(performance.now()-t0);
+    const parsed = parseMoveBrowser(text);
+    if(parsed.ok && board[parsed.r] && board[parsed.r][parsed.c]===0){
+      return { ok:true, move:{ r:parsed.r, c:parsed.c }, raw:text, attempts, latencyMs, parseFormat: parsed.format };
+    }
+    invalid = { raw: text.slice(0,120), reason: parsed.reason };
+  }
+  return { ok:true, move: randomLocalMove(board), fallback:true, fallbackReason: invalid ? ('invalid-parse:'+invalid.reason) : 'unknown', lastRaw: invalid && invalid.raw, attempts, latencyMs:0 };
+}
+
+/* ================= 配置块渲染 ================= */
+const LS_KEY = 'gomoku-arena-v1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ saved = {}; }
+function defaultCfg(providerId){ return { providerId: providerId||'demo', model:'', apiKey:'', baseUrl:'', temperature:0.3 }; }
+function loadSlot(key){ const c = saved[key]; if(!c) return defaultCfg(); return Object.assign(defaultCfg(), c); }
+function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(saved)); }catch(e){} }
+function provName(cfg){ const p = P_MAP[cfg.providerId] || P_MAP.custom; return p.name + (p.adapter!=='demo' && cfg.model ? ' · ' + cfg.model : ''); }
+
+function renderBlock(container, slotKey, title, stoneCls){
+  const cfg = loadSlot(slotKey);
+  saved[slotKey] = cfg;
+  const opts = PROVIDERS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  container.innerHTML = `
+    <div class="block" data-slot="${slotKey}">
+      <div class="block-head"><span class="stone ${stoneCls}"></span> ${title}</div>
+      <div class="field"><label class="lbl">供应商</label>
+        <select class="sel-prov">${opts}</select></div>
+      <div class="field f-model"><label class="lbl">模型（可手动修改）</label>
+        <input type="text" class="in-model" list="dl-${slotKey}" autocomplete="off" spellcheck="false">
+        <datalist id="dl-${slotKey}"></datalist></div>
+      <div class="field f-key"><label class="lbl key-label">API Key</label>
+        <div class="key-row"><input type="password" class="in-key" autocomplete="off" spellcheck="false">
+        <button type="button" class="tgl-key" title="显示/隐藏">显示</button></div></div>
+      <details class="adv-box"><summary>高级设置</summary>
+        <div class="adv">
+          <div class="row"><label>温度</label><input type="range" class="in-temp" min="0" max="1" step="0.05"><span class="val"></span></div>
+          <div class="row"><label>Base URL</label><input type="text" class="in-base" placeholder="留空使用供应商默认" autocomplete="off" spellcheck="false"></div>
         </div>
-      </div>
-    </div>
-
-    <div class="board-foot">
-      <div class="meta" id="metaInfo">手数 0 · 15×15 无禁手</div>
-      <div class="controls">
-        <button class="btn btn-ghost" id="btnUndo" disabled>悔棋</button>
-        <button class="btn btn-ghost" id="btnResign">认输</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ 控制面板 ============ -->
-  <aside class="side-pane">
-
-    <!-- ---------- 人机对战 ---------- -->
-    <div class="panel card is-active" data-panel="pve">
-      <h3 class="panel-title">对局设置</h3>
-
-      <div class="field">
-        <label>我的执子</label>
-        <div class="seg" id="segHumanColor">
-          <button class="seg-btn is-active" data-val="1">黑（先手）</button>
-          <button class="seg-btn" data-val="2">白（后手）</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>AI 模型</label>
-        <select class="input" id="pvePreset"></select>
-      </div>
-
-      <div class="model-box" id="pveBox">
-        <div class="grid-2">
-          <div class="field">
-            <label>Base URL</label>
-            <input class="input" id="pveBase" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
-          </div>
-          <div class="field">
-            <label>模型名称</label>
-            <input class="input" id="pveModel" placeholder="deepseek-chat" spellcheck="false" list="modelList" />
-          </div>
-        </div>
-        <div class="field">
-          <label>API Key</label>
-          <div class="key-row">
-            <input class="input" id="pveKey" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
-            <button class="btn btn-mini" data-eye="pveKey">显示</button>
-          </div>
-          <p class="hint">Key 只保存在你自己的浏览器 localStorage 里，不会上传到除模型厂商外的任何地方。</p>
-        </div>
-      </div>
-
-      <details class="adv">
-        <summary>高级参数</summary>
-        <div class="grid-2">
-          <div class="field">
-            <label>温度 <output id="pveTempOut">0.3</output></label>
-            <input type="range" id="pveTemp" min="0" max="1.5" step="0.1" value="0.3" />
-          </div>
-          <div class="field">
-            <label>单步超时 <output id="pveTimeOut">90s</output></label>
-            <input type="range" id="pveTime" min="15" max="180" step="5" value="90" />
-          </div>
-        </div>
-        <div class="field">
-          <label>内置引擎强度 <output id="pveStrengthOut">70%</output></label>
-          <input type="range" id="pveStrength" min="20" max="100" step="5" value="70" />
-          <p class="hint">仅在使用「内置引擎」时生效，越低越容易犯错。</p>
-        </div>
-        <label class="check"><input type="checkbox" id="pveHint" checked /> 给模型候选点提示（弱模型强烈建议开启）</label>
-        <label class="check"><input type="checkbox" id="pveReason" checked /> 要求模型给出一句简短理由</label>
       </details>
+      <div class="note note-txt"></div>
+    </div>`;
+  const block = container.firstElementChild;
+  const sel = $('.sel-prov', block), inModel = $('.in-model', block), inKey = $('.in-key', block);
+  const inBase = $('.in-base', block), inTemp = $('.in-temp', block), valTemp = $('.val', block);
+  const fModel = $('.f-model', block), fKey = $('.f-key', block), note = $('.note-txt', block);
 
-      <button class="btn btn-primary btn-block" id="btnStartPve">开始对局</button>
-      <button class="btn btn-ghost btn-block" id="btnStop" hidden>停止</button>
-    </div>
+  function applyProvider(){
+    const p = P_MAP[sel.value];
+    const prevId = cfg.providerId;
+    cfg.providerId = sel.value;
+    // 供应商变更或模型为空时自动填充默认模型；自定义/重载时保留已填模型
+    if(sel.value!==prevId || !cfg.model){
+      cfg.model = p.adapter==='demo' ? '' : (p.defaultModel || (p.models[0]||''));
+    }
+    cfg.baseUrl = (p.id==='custom') ? cfg.baseUrl : '';
+    inModel.value = cfg.model;
+    inBase.value = p.id==='custom' ? cfg.baseUrl : '';
+    const dl = $('#dl-'+slotKey);
+    dl.innerHTML = p.models.map(m=>`<option value="${esc(m)}">`).join('');
+    const isDemo = p.adapter==='demo';
+    fModel.classList.toggle('hidden', isDemo);
+    fKey.classList.toggle('hidden', isDemo);
+    inKey.placeholder = isDemo ? '' : p.apiKeyLabel || 'API Key';
+    note.textContent = p.note || '';
+    syncTemp();
+  }
+  function syncTemp(){
+    inTemp.value = cfg.temperature;
+    valTemp.textContent = Number(cfg.temperature).toFixed(2);
+  }
+  sel.value = cfg.providerId || 'demo';
+  inKey.value = cfg.apiKey || '';
+  applyProvider();
 
-    <!-- ---------- 模型对战 ---------- -->
-    <div class="panel card" data-panel="pvp">
-      <h3 class="panel-title">对战设置</h3>
+  sel.addEventListener('change', applyProvider);
+  inModel.addEventListener('input', ()=>{ cfg.model = inModel.value; persist(); });
+  inKey.addEventListener('input', ()=>{ cfg.apiKey = inKey.value; persist(); });
+  inBase.addEventListener('input', ()=>{ cfg.baseUrl = inBase.value; persist(); });
+  inTemp.addEventListener('input', ()=>{ cfg.temperature = Number(inTemp.value); syncTemp(); persist(); });
+  $('.tgl-key', block).addEventListener('click', (e)=>{
+    const t=e.currentTarget; const show = inKey.type==='password';
+    inKey.type = show?'text':'password'; t.textContent = show?'隐藏':'显示';
+  });
+  return block;
+}
 
-      <div class="field">
-        <label>赛制</label>
-        <div class="seg" id="segSeries">
-          <button class="seg-btn is-active" data-val="1">单局定胜</button>
-          <button class="seg-btn" data-val="3">三局两胜</button>
+/* ================= 全局状态 ================= */
+const S = {
+  mode: 'human',
+  board: emptyBoard(), moves: [], current: 1, over: false, winner: 0,
+  thinking: false, running: false, gen: 0,
+  humanColor: 1,
+  blackCfgKey: 'A',
+  series: { format:'single', scores:{A:0,B:0}, game:1 },
+  sideLabel: {1:'you', 2:'ai'},
+  names: {you:'你（人类）', ai:'AI 模型', A:'模型 A', B:'模型 B'},
+  stats: {},
+};
+function statKey(label){ return S.stats[label] || (S.stats[label] = { name:S.names[label]||label, wins:0, losses:0, draws:0, invalid:0, apiErr:0, latencyMs:0, calls:0, games:0 }); }
+function cfgOf(p){
+  if(S.mode==='human') return (p===S.humanColor ? null : loadSlot('humanAI'));
+  const key = (p===1) ? S.blackCfgKey : (S.blackCfgKey==='A'?'B':'A');
+  return loadSlot(key);
+}
+function cfgLabelOf(p){
+  if(S.mode==='human') return (p===S.humanColor ? 'you' : 'ai');
+  const key = (p===1) ? S.blackCfgKey : (S.blackCfgKey==='A'?'B':'A');
+  return key;
+}
+function nameOf(p){
+  if(S.mode==='human') return S.names[(p===S.humanColor)?'you':'ai'];
+  const key = (p===1) ? S.blackCfgKey : (S.blackCfgKey==='A'?'B':'A');
+  const cfg = loadSlot(key);
+  return (P_MAP[cfg.providerId]||{}).adapter==='demo' ? 'DemoBot' : provName(cfg);
+}
+
+/* ================= DOM 引用 ================= */
+const canvas = $('#boardCanvas'), ctx = canvas.getContext('2d');
+const turnStone = $('#turnStone'), turnText = $('#turnText'), msgEl = $('#msg'), metaEl = $('#meta');
+const tabLog = $('#tabLog'), tabStats = $('#tabStats');
+const overlay = $('#overlay');
+let lastHover = null;
+
+/* ================= 画布 ================= */
+let cvSize = 0, cell = 0, pad = 0;
+function resizeCanvas(){
+  const holder = $('.board-holder');
+  const w = holder.clientWidth;
+  const maxH = Math.max(320, Math.min(window.innerHeight * 0.62, 640));
+  let size = Math.min(w, maxH);
+  size = Math.max(240, size);
+  const dpr = window.devicePixelRatio || 1;
+  cvSize = size; cell = size / 16; pad = cell;
+  canvas.style.width = size+'px'; canvas.style.height = size+'px';
+  canvas.width = Math.round(size*dpr); canvas.height = Math.round(size*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawBoard();
+}
+function drawBoard(){
+  const size = cvSize, c = cell, p = pad;
+  ctx.clearRect(0,0,size,size);
+  // 暖木棋盘
+  const g = ctx.createLinearGradient(0,0,size,size);
+  g.addColorStop(0,'#9a6b42'); g.addColorStop(.5,'#84562f'); g.addColorStop(1,'#6b4526');
+  roundRect(0,0,size,size,14);
+  ctx.fillStyle = g; ctx.fill();
+  const is = ctx.createLinearGradient(0,0,0,size);
+  is.addColorStop(0,'rgba(0,0,0,.22)'); is.addColorStop(.12,'rgba(0,0,0,0)'); is.addColorStop(.88,'rgba(0,0,0,0)'); is.addColorStop(1,'rgba(0,0,0,.28)');
+  ctx.fillStyle = is; roundRect(0,0,size,size,14); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,22,10,.85)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let i=0;i<SIZE;i++){
+    const x = p + i*c, y = p + i*c;
+    ctx.moveTo(p, y); ctx.lineTo(size-p, y);
+    ctx.moveTo(x, p); ctx.lineTo(x, size-p);
+  }
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(35,18,6,.9)';
+  [[3,3],[7,7],[11,11],[3,11],[11,3]].forEach(([r,col])=>{
+    ctx.beginPath(); ctx.arc(p+col*c, p+r*c, Math.max(2.4, c*0.16), 0, Math.PI*2); ctx.fill();
+  });
+  ctx.font = `${Math.max(9, c*0.34)}px ui-monospace,Menlo,monospace`;
+  ctx.fillStyle = 'rgba(40,22,8,.55)'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<SIZE;i++){
+    ctx.fillText(COLS[i], p+i*c, size - p*0.42);
+    ctx.fillText(String(i+1), p*0.42, p+i*c);
+  }
+  for(let r=0;r<SIZE;r++)for(let cidx=0;cidx<SIZE;cidx++){
+    const v = S.board[r][cidx];
+    if(v) drawStone(p+cidx*c, p+r*c, v, c);
+  }
+  if(S.moves.length){
+    const lm = S.moves[S.moves.length-1];
+    ctx.strokeStyle = '#d97757'; ctx.lineWidth = Math.max(1.6, c*0.09);
+    ctx.beginPath(); ctx.arc(p+lm.c*c, p+lm.r*c, c*0.44, 0, Math.PI*2); ctx.stroke();
+  }
+  if(lastHover && S.mode==='human' && !S.over && !S.thinking && S.board[lastHover.r][lastHover.c]===0){
+    ctx.globalAlpha = .45; drawStone(p+lastHover.c*c, p+lastHover.r*c, S.current, c); ctx.globalAlpha = 1;
+  }
+}
+function drawStone(x,y,player,c){
+  const r = c*0.42;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = c*0.16; ctx.shadowOffsetY = c*0.06;
+  const g = ctx.createRadialGradient(x-c*0.14, y-c*0.16, c*0.05, x, y, r);
+  if(player===1){ g.addColorStop(0,'#575754'); g.addColorStop(.25,'#2c2c2b'); g.addColorStop(1,'#141413'); }
+  else { g.addColorStop(0,'#ffffff'); g.addColorStop(.55,'#e6e6e2'); g.addColorStop(1,'#b8b8b3'); }
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+  if(player===2){ ctx.strokeStyle='rgba(30,30,29,.35)'; ctx.lineWidth=1; ctx.stroke(); }
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function canvasPoint(e){
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX!==undefined?e.clientX:e.touches[0].clientX) - rect.left;
+  const y = (e.clientY!==undefined?e.clientY:e.touches[0].clientY) - rect.top;
+  const c = Math.round((x-pad)/cell), r = Math.round((y-pad)/cell);
+  if(r<0||r>=SIZE||c<0||c>=SIZE) return null;
+  return {r,c};
+}
+canvas.addEventListener('click', (e)=>{
+  const pt = canvasPoint(e);
+  if(!pt) return;
+  if(S.mode==='human' && !S.over && !S.thinking && S.current===S.humanColor){
+    humanMove(pt.r, pt.c);
+  }
+});
+canvas.addEventListener('mousemove', (e)=>{
+  lastHover = S.mode==='human' && !S.over && !S.thinking ? canvasPoint(e) : null;
+  drawBoard();
+});
+canvas.addEventListener('mouseleave', ()=>{ lastHover=null; drawBoard(); });
+new ResizeObserver(resizeCanvas).observe($('.board-holder'));
+window.addEventListener('resize', resizeCanvas);
+
+/* ================= 对局流程 ================= */
+function resetGame(keepSeries){
+  S.board = emptyBoard(); S.moves = []; S.current = 1; S.over = false; S.winner = 0; S.thinking = false;
+  S.running = false; S.gen++;
+  if(!keepSeries){ S.series = { format: S.series.format, scores:{A:0,B:0}, game:1 }; }
+  S.blackCfgKey = (S.series.game % 2 === 1) ? 'A' : 'B';
+  $('#btnUndo').style.display = S.mode==='human' ? 'inline-flex' : 'none';
+  $('#btnPause').style.display = 'none';
+  renderStatus(); drawBoard(); renderLog(); renderStats();
+}
+function newSeries(){ resetGame(false); }
+
+function applyMove(r,c,p,meta,label){
+  S.moves.push({r,c,p}); S.board[r][c]=p;
+  const st = statKey(label);
+  if(meta){
+    if(meta.invalid) st.invalid++;
+    if(meta.apiErr){ st.apiErr++; st.latencyMs += meta.latency||0; st.calls++; }
+    else { st.latencyMs += meta.latency||0; st.calls++; }
+  }
+  addLog(p, r, c, nameOf(p), meta);
+  const win = checkWinAt(S.board, r, c, p);
+  if(win){ endGame(p); return; }
+  if(S.moves.length >= SIZE*SIZE){ endGame(0); return; }
+  S.current = 3 - p;
+  renderStatus(); drawBoard(); renderLog();
+}
+
+function endGame(winner){
+  S.over = true; S.winner = winner;
+  const sides = [1,2];
+  sides.forEach(p=>{ const k = cfgLabelOf(p); statKey(k); });
+  if(winner===0){ statKey(cfgLabelOf(1)).draws++; statKey(cfgLabelOf(2)).draws++; }
+  else {
+    statKey(cfgLabelOf(winner)).wins++; statKey(cfgLabelOf(3-winner)).losses++;
+  }
+  if(S.mode==='battle' && S.series.format==='bo3' && winner!==0){
+    const key = cfgLabelOf(winner);
+    S.series.scores[key]++;
+    S.series.game++;
+  }
+  renderStatus(); drawBoard(); renderStats(); showOverlay();
+}
+
+async function aiTurn(){
+  const p = S.current;
+  const cfg = cfgOf(p);
+  const label = cfgLabelOf(p);
+  setThinking(true, p);
+  const meta = {};
+  let move = null;
+  const t0 = performance.now();
+  const prov = P_MAP[cfg.providerId];
+  if(prov.adapter==='demo'){
+    await sleep(320);
+    move = demoBotMove(S.board, p);
+  } else {
+    const res = await getMoveBrowser({
+      moves: S.moves,
+      next: p,
+      config: {
+        providerId: cfg.providerId,
+        adapter: prov.adapter,
+        baseUrl: cfg.baseUrl || prov.baseUrl,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        temperature: cfg.temperature,
+      }
+    });
+    move = res.move;
+    if(res.fallback){
+      meta.invalid = 1;
+      if(res.fallbackReason==='api-error') meta.apiErr = res.error || 'API 调用失败';
+    } else if(res.attempts>1){
+      meta.retried = res.attempts-1;
+    }
+  }
+  meta.latency = Math.round(performance.now() - t0);
+  if(meta.apiErr) toast(('模型调用失败：' + meta.apiErr).slice(0,160) + '，本手已用随机着法兜底', 'err');
+  setThinking(false);
+  if(move) applyMove(move.r, move.c, p, meta, label);
+  renderStatus();
+}
+
+function setThinking(on, p){
+  S.thinking = on;
+  if(on){
+    msgEl.innerHTML = `${p===1?'黑':'白'}方思考中<span class="spin"><i></i><i></i><i></i></span>`;
+  } else {
+    msgEl.innerHTML = S.over ? '' : (S.mode==='human' && S.current===S.humanColor ? '轮到你落子' : '');
+  }
+}
+
+function humanMove(r,c){
+  if(S.board[r][c]!==0){ toast('这里已经有棋子了','warn'); return; }
+  applyMove(r,c,S.humanColor, null, 'you');
+  if(!S.over) aiTurn();
+}
+
+function renderStatus(){
+  const p = S.current;
+  const colorName = p===1?'黑':'白';
+  if(S.over){
+    turnStone.className = 'stone ' + (S.winner===1?'black':S.winner===2?'white':'accent');
+    turnText.textContent = S.winner===0 ? '平局' : (colorName+'方获胜');
+    msgEl.innerHTML = '';
+  } else {
+    turnStone.className = 'stone ' + (p===1?'black':'white');
+    turnText.textContent = `${colorName}方 · ` + (S.mode==='human' ? (p===S.humanColor?'你':'AI') : nameOf(p));
+  }
+  let metaHtml = `<span>第 <b>${S.moves.length}</b> 手</span>`;
+  if(S.mode==='battle'){
+    metaHtml += `<span class="score-pill">${S.series.format==='bo3' ? `第${S.series.game}局 ` : ''}${S.series.scores.A} : ${S.series.scores.B}</span>`;
+  }
+  metaEl.innerHTML = metaHtml;
+}
+
+/* ================= 日志 & 统计 ================= */
+function addLog(p, r, c, name, meta){
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.innerHTML = `<span class="no">${S.moves.length}.</span><span class="st" style="color:${p===1?'#d8d8d4':'#fff'}">${p===1?'●':'○'}</span><span class="cd">${coordLabel(r,c)}</span><span class="nm">${esc(name)}${meta&&meta.invalid?' <i style="color:#d9a441">(兜底)</i>':''}${meta&&meta.apiErr?' <i style="color:#e07a6e">(失败)</i>':''}</span>`;
+  tabLog.appendChild(el);
+  tabLog.scrollTop = tabLog.scrollHeight;
+}
+function renderLog(){
+  tabLog.innerHTML = '';
+  if(!S.moves.length){ tabLog.innerHTML = '<div class="empty">暂无落子，开始一局吧</div>'; return; }
+  S.moves.forEach((m,i)=>{
+    const el = document.createElement('div');
+    el.className = 'log-entry';
+    el.innerHTML = `<span class="no">${i+1}.</span><span class="st" style="color:${m.p===1?'#d8d8d4':'#fff'}">${m.p===1?'●':'○'}</span><span class="cd">${coordLabel(m.r,m.c)}</span><span class="nm">${esc(nameOf(m.p))}</span>`;
+    tabLog.appendChild(el);
+  });
+  tabLog.scrollTop = tabLog.scrollHeight;
+}
+function renderStats(){
+  tabStats.innerHTML = '';
+  const keys = S.mode==='human' ? ['you','ai'] : ['A','B'];
+  if(!Object.keys(S.stats).length){ tabStats.innerHTML = '<div class="empty">对局结束后自动统计胜负、无效着法与响应耗时</div>'; return; }
+  const ordered = keys.filter(k=>S.stats[k]).concat(Object.keys(S.stats).filter(k=>!keys.includes(k)));
+  ordered.forEach(k=>{
+    const st = S.stats[k];
+    const avg = st.calls ? Math.round(st.latencyMs/st.calls) : '—';
+    tabStats.innerHTML += `
+      <div class="stat-card">
+        <div class="hd"><span class="stone ${k==='you'?'accent':k==='A'?'black':'white'}"></span> ${esc(st.name)}</div>
+        <div class="wld"><div class="w"><b>${st.wins}</b>胜</div><div class="l"><b>${st.losses}</b>负</div><div class="d"><b>${st.draws}</b>平</div></div>
+        <div class="kv">
+          <span>无效着法 <b>${st.invalid}</b></span>
+          <span>调用失败 <b>${st.apiErr}</b></span>
+          <span>平均响应 <b>${avg} ms</b></span>
+          <span>有效对局 <b>${st.games||0}</b></span>
         </div>
-        <p class="hint" id="seriesHint">单局：随机决定先后手</p>
-      </div>
+      </div>`;
+  });
+}
 
-      <div class="vs-head">
-        <span class="tag tag-a">黑方（先手）</span>
-        <span class="vs">VS</span>
-        <span class="tag tag-b">白方（后手）</span>
-      </div>
-      <p class="hint">三局两胜：第 2 局自动交换先后手，第 3 局再交换，保证公平。</p>
+/* ================= 胜负弹层 ================= */
+function showOverlay(){
+  const w = S.winner;
+  const badge = $('#ovBadge'), title = $('#ovTitle'), sub = $('#ovSub'), series = $('#ovSeries'), stats = $('#ovStats'), actions = $('#ovActions');
+  badge.className = 'ov-badge ' + (w===1?'black':w===2?'white':'draw');
+  title.className = 'ov-title ' + (w===1?'win-black':w===2?'win-white':'');
+  if(w===0){
+    title.textContent = '平局';
+    sub.innerHTML = `棋盘已下满 ${SIZE*SIZE} 手，未分胜负。`;
+  } else {
+    title.textContent = (w===1?'黑方':'白方') + '获胜';
+    sub.innerHTML = `第 <b>${S.moves.length}</b> 手 ${coordLabel(S.moves[S.moves.length-1].r, S.moves[S.moves.length-1].c)} 致胜<br>${esc(nameOf(w))}`;
+  }
+  let seriesText = '';
+  if(S.mode==='battle'){
+    const decided = S.series.scores.A>=2 || S.series.scores.B>=2;
+    if(S.series.format==='bo3'){
+      series.style.display='inline-block';
+      if(decided){
+        const champ = S.series.scores.A>=2 ? 'A' : 'B';
+        const champName = loadSlot(champ).providerId==='demo' ? 'DemoBot' : provName(loadSlot(champ));
+        seriesText = `三局两胜 · 系列赛冠军：${champ==='A'?'黑方':'白方'}（${esc(champName)}） ${S.series.scores.A} : ${S.series.scores.B}`;
+      } else {
+        seriesText = `第 ${S.series.game-1} 局结束 · 当前比分 ${S.series.scores.A} : ${S.series.scores.B}（下一局交换先后手）`;
+      }
+    } else {
+      series.style.display='inline-block';
+      seriesText = `单局 · 比分 ${S.series.scores.A} : ${S.series.scores.B}`;
+    }
+    series.textContent = seriesText;
+  } else series.style.display='none';
+  const sides = [1,2];
+  stats.innerHTML = sides.map(p=>{
+    const k = cfgLabelOf(p); const st = S.stats[k] || statKey(k);
+    const avg = st.calls ? Math.round(st.latencyMs/st.calls) : '—';
+    return `<div class="it"><b>${esc(st.name)}${p===w?' ✓':''}</b>胜 ${st.wins} · 负 ${st.losses} · 平 ${st.draws}<br>无效 ${st.invalid} · 失败 ${st.apiErr} · 平均 ${avg}ms</div>`;
+  }).join('');
+  let btns = '';
+  if(S.mode==='battle' && S.series.format==='bo3' && !(S.series.scores.A>=2||S.series.scores.B>=2)){
+    btns += `<button class="btn primary" id="ovNext">开始下一局</button>`;
+  }
+  btns += `<button class="btn" id="ovAgain">${S.mode==='battle'?'重开系列赛':'再来一局'}</button>`;
+  btns += `<button class="btn ghost" id="ovClose">查看棋盘</button>`;
+  actions.innerHTML = btns;
+  $('#ovNext') && $('#ovNext').addEventListener('click', ()=>{ overlay.classList.remove('show'); resetGame(true); if(S.mode==='battle') startBattle(); });
+  $('#ovAgain').addEventListener('click', ()=>{ overlay.classList.remove('show'); resetGame(false); if(S.mode==='battle') startBattle(); else if(S.mode==='human' && S.humanColor===2) setTimeout(()=>aiTurn(), 400); });
+  $('#ovClose').addEventListener('click', ()=> overlay.classList.remove('show'));
+  overlay.classList.add('show');
+}
 
-      <div class="model-box">
-        <div class="field">
-          <label>模型 A</label>
-          <select class="input" id="pvpPresetA"></select>
-        </div>
-        <div class="grid-2">
-          <div class="field">
-            <label>Base URL</label>
-            <input class="input" id="pvpBaseA" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
-          </div>
-          <div class="field">
-            <label>模型名称</label>
-            <input class="input" id="pvpModelA" placeholder="deepseek-chat" spellcheck="false" list="modelList" />
-          </div>
-        </div>
-        <div class="field">
-          <label>API Key</label>
-          <div class="key-row">
-            <input class="input" id="pvpKeyA" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
-            <button class="btn btn-mini" data-eye="pvpKeyA">显示</button>
-          </div>
-        </div>
-      </div>
+/* ================= 对战循环 ================= */
+async function startBattle(){
+  if(S.over) resetGame(false);
+  if(!validateBattle()) return;
+  const myGen = ++S.gen;
+  S.running = true;
+  $('#btnPause').style.display = 'inline-flex';
+  $('#btnPause').textContent = '暂停';
+  renderStatus();
+  const speed = Number(document.querySelector('input[name=speed]:checked').value);
+  while(S.running && !S.over && S.mode==='battle' && myGen===S.gen){
+    await aiTurn();
+    if(S.over || !S.running) break;
+    await sleep(speed);
+  }
+  if(S.over) $('#btnPause').style.display='none';
+}
+function validateBattle(){
+  for(const key of ['A','B']){
+    const cfg = loadSlot(key);
+    const prov = P_MAP[cfg.providerId];
+    if(prov.adapter!=='demo' && !cfg.model){ toast(`模型对战 · ${key==='A'?'黑方':'白方'}：请填写模型名`, 'err'); return false; }
+    if(prov.adapter!=='demo' && !cfg.apiKey){ toast(`模型对战 · ${key==='A'?'黑方':'白方'}：请填写 API Key（或改用 DemoBot）`, 'err'); return false; }
+  }
+  return true;
+}
 
-      <div class="model-box box-b">
-        <div class="field">
-          <label>模型 B</label>
-          <select class="input" id="pvpPresetB"></select>
-        </div>
-        <div class="grid-2">
-          <div class="field">
-            <label>Base URL</label>
-            <input class="input" id="pvpBaseB" placeholder="https://api.moonshot.cn/v1" spellcheck="false" />
-          </div>
-          <div class="field">
-            <label>模型名称</label>
-            <input class="input" id="pvpModelB" placeholder="kimi-k2.5" spellcheck="false" list="modelList" />
-          </div>
-        </div>
-        <div class="field">
-          <label>API Key</label>
-          <div class="key-row">
-            <input class="input" id="pvpKeyB" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
-            <button class="btn btn-mini" data-eye="pvpKeyB">显示</button>
-          </div>
-        </div>
-      </div>
+/* ================= Toast ================= */
+function toast(msg, type){
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type||'');
+  el.textContent = msg;
+  $('#toast').appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),320); }, 4200);
+}
 
-      <details class="adv">
-        <summary>高级参数</summary>
-        <div class="grid-2">
-          <div class="field">
-            <label>出招间隔 <output id="pvpDelayOut">0.6s</output></label>
-            <input type="range" id="pvpDelay" min="0" max="3" step="0.2" value="0.6" />
-          </div>
-          <div class="field">
-            <label>单步超时 <output id="pvpTimeOut">90s</output></label>
-            <input type="range" id="pvpTime" min="15" max="180" step="5" value="90" />
-          </div>
-        </div>
-        <div class="field">
-          <label>内置引擎强度 <output id="pvpStrengthOut">100%</output></label>
-          <input type="range" id="pvpStrength" min="20" max="100" step="5" value="100" />
-          <p class="hint">仅在使用「内置引擎」时生效；用于评测时建议调到 100%。</p>
-        </div>
-        <label class="check"><input type="checkbox" id="pvpTempToggle" /> 使用非零温度（更有变化，默认 0）</label>
-        <label class="check"><input type="checkbox" id="pvpHint" checked /> 给模型候选点提示</label>
-        <label class="check"><input type="checkbox" id="pvpReason" checked /> 要求模型给出一句简短理由</label>
-        <label class="check"><input type="checkbox" id="pvpAutoNext" checked /> 三局两胜时自动开始下一局</label>
-      </details>
+/* ================= 模式切换与事件绑定 ================= */
+function setMode(mode){
+  S.mode = mode;
+  $('#humanCfgCard').style.display = mode==='human' ? '' : 'none';
+  $('#battleCfgCard').style.display = mode==='battle' ? '' : 'none';
+  $('#btnPause').style.display = 'none';
+  S.running = false; S.gen++;
+  resetGame(false);
+}
+$$('#modeSeg input').forEach(inp=> inp.addEventListener('change', ()=> setMode(inp.value)));
+$$('#colorSeg input').forEach(inp=> inp.addEventListener('change', ()=>{ S.humanColor = Number(inp.value); resetGame(false); }));
+$('#formatSeg').addEventListener('change', (e)=>{
+  S.series.format = document.querySelector('input[name=format]:checked').value;
+  newSeries();
+});
+$('#startBattle').addEventListener('click', ()=>{
+  if(S.running) return;
+  startBattle();
+});
+$('#btnNew').addEventListener('click', ()=>{
+  S.running = false; S.gen++;
+  if(S.mode==='battle'){
+    if(confirm('重新开始当前对局？系列赛比分将保留。')) resetGame(true);
+  } else resetGame(false);
+});
+$('#btnUndo').addEventListener('click', ()=>{
+  if(S.mode!=='human' || S.thinking || S.over) return;
+  if(S.moves.length < 2) return;
+  S.moves.pop(); S.moves.pop();
+  S.board = emptyBoard();
+  S.moves.forEach(m=> S.board[m.r][m.c]=m.p);
+  S.current = S.humanColor;
+  S.over = false; S.winner = 0;
+  renderStatus(); drawBoard(); renderLog();
+});
+$('#btnPause').addEventListener('click', ()=>{
+  if(S.running){ S.running = false; $('#btnPause').textContent='继续'; }
+  else if(!S.over && S.mode==='battle'){ $('#btnPause').textContent='暂停'; startBattle(); }
+});
+$('#clearStats').addEventListener('click', ()=>{ S.stats = {}; renderStats(); toast('统计已清空','ok'); });
+$$('.tabs button').forEach(btn=> btn.addEventListener('click', ()=>{
+  $$('.tabs button').forEach(b=>b.classList.toggle('on', b===btn));
+  tabLog.style.display = btn.dataset.tab==='log' ? '' : 'none';
+  tabStats.style.display = btn.dataset.tab==='stats' ? '' : 'none';
+}));
 
-      <button class="btn btn-primary btn-block" id="btnStartPvp">开始对战</button>
-      <button class="btn btn-ghost btn-block" id="btnStopPvp" hidden>停止</button>
-    </div>
-
-    <!-- ---------- 说明 ---------- -->
-    <div class="panel card" data-panel="guide">
-      <h3 class="panel-title">它是怎么让"普通语言模型"下棋的？</h3>
-      <ol class="steps">
-        <li><b>每回合重画棋盘</b>：把 15×15 局面渲染成 ASCII 图（X/O/.），连同坐标体系（列 A-O、行 1-15）一起发给模型。</li>
-        <li><b>给出规则与优先级</b>：能赢就赢 → 对手四连必堵 → 防活三 → 做自己的活三/活四。</li>
-        <li><b>限定输出格式</b>：只准输出 <code>MOVE: H8</code>，避免废话。</li>
-        <li><b>容错解析 + 重试</b>：支持 <code>MOVE: H8</code>、<code>H8</code>、<code>{"row":8,"col":8}</code>、<code>(8,8)</code> 等多种写法；解析出非法点会自动把原因回传给模型重试一次；仍失败则由内置引擎兜底，不会卡住对局。</li>
-        <li><b>可选候选点提示</b>：把引擎算出的 Top5 候选点放进 prompt，弱模型棋力会明显提升（可在高级参数里关闭以做"纯净评测"）。</li>
-      </ol>
-
-      <h3 class="panel-title">预设供应商</h3>
-      <div class="provider-list" id="providerList"></div>
-
-      <h3 class="panel-title">常见问题</h3>
-      <dl class="faq">
-        <dt>为什么需要跑本地服务？</dt>
-        <dd>浏览器直连各家 API 会被 CORS 拦截，且 Anthropic 协议不兼容 OpenAI 格式。本地服务只做转发，不存储你的 Key。</dd>
-        <dt>模型老是下到已有棋子上？</dt>
-        <dd>开启"候选点提示"，或换更强/更新的模型；连续失败会触发内置引擎兜底。</dd>
-        <dt>想接没列出的模型？</dt>
-        <dd>选"自定义（OpenAI 兼容）"，填任意 Base URL + Key + 模型名即可，包括 Ollama、vLLM、OneAPI、LiteLLM 等自建网关。</dd>
-      </dl>
-    </div>
-
-    <!-- ---------- 对局日志（常驻） ---------- -->
-    <div class="panel card log-panel">
-      <h3 class="panel-title">对局日志<button class="btn btn-mini" id="btnClearLog">清空</button></h3>
-      <div class="log" id="log"><div class="log-empty">还没有记录。开始一局后，模型的每一次思考都会显示在这里。</div></div>
-    </div>
-  </aside>
-</main>
-
-<datalist id="modelList"></datalist>
-
-<footer class="foot">
-  <span>Gomoku Arena · 本地运行 · Node 18+</span>
-  <span id="health">服务状态检测中…</span>
-</footer>
-
-<script src="providers.js"></script>
-<script src="app.js"></script>
+/* ================= 启动 ================= */
+renderBlock($('#cfgHumanAI'), 'humanAI', 'AI 模型', 'accent');
+renderBlock($('#cfgBattleA'), 'battleA', '黑方模型', 'black');
+renderBlock($('#cfgBattleB'), 'battleB', '白方模型', 'white');
+persist();
+S.names.ai = loadSlot('humanAI').providerId==='demo' ? 'DemoBot' : provName(loadSlot('humanAI'));
+S.names.A = loadSlot('battleA').providerId==='demo' ? 'DemoBot' : provName(loadSlot('battleA'));
+S.names.B = loadSlot('battleB').providerId==='demo' ? 'DemoBot' : provName(loadSlot('battleB'));
+resetGame(false);
+resizeCanvas();
+</script>
 </body>
 </html>
