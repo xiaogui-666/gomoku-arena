@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0b0f1a" />
+<title>Gomoku Arena · 五子棋 AI 评测台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0f1a'/%3E%3Ccircle cx='11' cy='13' r='5' fill='%23222'/%3E%3Ccircle cx='21' cy='19' r='5' fill='%23eee'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">
+      <span class="stone s-b"></span><span class="stone s-w"></span>
+    </div>
+    <div class="brand-text">
+      <h1>Gomoku Arena</h1>
+      <p>五子棋 AI 模型在线评测台</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-active" data-tab="pve" role="tab">人机对战</button>
+    <button class="tab" data-tab="pvp" role="tab">模型对战</button>
+    <button class="tab" data-tab="guide" role="tab">接入说明</button>
+  </nav>
+</header>
+
+<main class="layout">
+
+  <!-- ============ 棋盘区 ============ -->
+  <section class="board-pane card">
+    <div class="board-head">
+      <div class="turn-chip" id="turnChip">
+        <span class="dot" id="turnDot"></span>
+        <span id="turnText">准备开始</span>
+      </div>
+      <div class="scoreboard" id="scoreboard">
+        <div class="score-item"><span class="tag tag-a" id="scoreAName">先手</span><b id="scoreA">0</b></div>
+        <span class="score-sep">:</span>
+        <div class="score-item"><span class="tag tag-b" id="scoreBName">后手</span><b id="scoreB">0</b></div>
+      </div>
+    </div>
+
+    <div class="board-wrap">
+      <canvas id="board" aria-label="五子棋棋盘"></canvas>
+      <div class="board-overlay" id="boardOverlay">
+        <div class="overlay-card">
+          <div class="overlay-icon" id="overlayIcon">🏆</div>
+          <h2 id="overlayTitle">胜负已分</h2>
+          <p id="overlayDesc">黑棋获胜</p>
+          <div class="overlay-actions">
+            <button class="btn btn-primary" id="overlayPrimary">再来一局</button>
+            <button class="btn btn-ghost" id="overlaySecondary">返回设置</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="board-foot">
+      <div class="meta" id="metaInfo">手数 0 · 15×15 无禁手</div>
+      <div class="controls">
+        <button class="btn btn-ghost" id="btnUndo" disabled>悔棋</button>
+        <button class="btn btn-ghost" id="btnResign">认输</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 控制面板 ============ -->
+  <aside class="side-pane">
+
+    <!-- ---------- 人机对战 ---------- -->
+    <div class="panel card is-active" data-panel="pve">
+      <h3 class="panel-title">对局设置</h3>
+
+      <div class="field">
+        <label>我的执子</label>
+        <div class="seg" id="segHumanColor">
+          <button class="seg-btn is-active" data-val="1">黑（先手）</button>
+          <button class="seg-btn" data-val="2">白（后手）</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>AI 模型</label>
+        <select class="input" id="pvePreset"></select>
+      </div>
+
+      <div class="model-box" id="pveBox">
+        <div class="grid-2">
+          <div class="field">
+            <label>Base URL</label>
+            <input class="input" id="pveBase" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>模型名称</label>
+            <input class="input" id="pveModel" placeholder="deepseek-chat" spellcheck="false" list="modelList" />
+          </div>
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <div class="key-row">
+            <input class="input" id="pveKey" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
+            <button class="btn btn-mini" data-eye="pveKey">显示</button>
+          </div>
+          <p class="hint">Key 只保存在你自己的浏览器 localStorage 里，不会上传到除模型厂商外的任何地方。</p>
+        </div>
+      </div>
+
+      <details class="adv">
+        <summary>高级参数</summary>
+        <div class="grid-2">
+          <div class="field">
+            <label>温度 <output id="pveTempOut">0.3</output></label>
+            <input type="range" id="pveTemp" min="0" max="1.5" step="0.1" value="0.3" />
+          </div>
+          <div class="field">
+            <label>单步超时 <output id="pveTimeOut">90s</output></label>
+            <input type="range" id="pveTime" min="15" max="180" step="5" value="90" />
+          </div>
+        </div>
+        <div class="field">
+          <label>内置引擎强度 <output id="pveStrengthOut">70%</output></label>
+          <input type="range" id="pveStrength" min="20" max="100" step="5" value="70" />
+          <p class="hint">仅在使用「内置引擎」时生效，越低越容易犯错。</p>
+        </div>
+        <label class="check"><input type="checkbox" id="pveHint" checked /> 给模型候选点提示（弱模型强烈建议开启）</label>
+        <label class="check"><input type="checkbox" id="pveReason" checked /> 要求模型给出一句简短理由</label>
+      </details>
+
+      <button class="btn btn-primary btn-block" id="btnStartPve">开始对局</button>
+      <button class="btn btn-ghost btn-block" id="btnStop" hidden>停止</button>
+    </div>
+
+    <!-- ---------- 模型对战 ---------- -->
+    <div class="panel card" data-panel="pvp">
+      <h3 class="panel-title">对战设置</h3>
+
+      <div class="field">
+        <label>赛制</label>
+        <div class="seg" id="segSeries">
+          <button class="seg-btn is-active" data-val="1">单局定胜</button>
+          <button class="seg-btn" data-val="3">三局两胜</button>
+        </div>
+        <p class="hint" id="seriesHint">单局：随机决定先后手</p>
+      </div>
+
+      <div class="vs-head">
+        <span class="tag tag-a">黑方（先手）</span>
+        <span class="vs">VS</span>
+        <span class="tag tag-b">白方（后手）</span>
+      </div>
+      <p class="hint">三局两胜：第 2 局自动交换先后手，第 3 局再交换，保证公平。</p>
+
+      <div class="model-box">
+        <div class="field">
+          <label>模型 A</label>
+          <select class="input" id="pvpPresetA"></select>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Base URL</label>
+            <input class="input" id="pvpBaseA" placeholder="https://api.deepseek.com/v1" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>模型名称</label>
+            <input class="input" id="pvpModelA" placeholder="deepseek-chat" spellcheck="false" list="modelList" />
+          </div>
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <div class="key-row">
+            <input class="input" id="pvpKeyA" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
+            <button class="btn btn-mini" data-eye="pvpKeyA">显示</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="model-box box-b">
+        <div class="field">
+          <label>模型 B</label>
+          <select class="input" id="pvpPresetB"></select>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Base URL</label>
+            <input class="input" id="pvpBaseB" placeholder="https://api.moonshot.cn/v1" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>模型名称</label>
+            <input class="input" id="pvpModelB" placeholder="kimi-k2.5" spellcheck="false" list="modelList" />
+          </div>
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <div class="key-row">
+            <input class="input" id="pvpKeyB" type="password" placeholder="sk-..." spellcheck="false" autocomplete="off" />
+            <button class="btn btn-mini" data-eye="pvpKeyB">显示</button>
+          </div>
+        </div>
+      </div>
+
+      <details class="adv">
+        <summary>高级参数</summary>
+        <div class="grid-2">
+          <div class="field">
+            <label>出招间隔 <output id="pvpDelayOut">0.6s</output></label>
+            <input type="range" id="pvpDelay" min="0" max="3" step="0.2" value="0.6" />
+          </div>
+          <div class="field">
+            <label>单步超时 <output id="pvpTimeOut">90s</output></label>
+            <input type="range" id="pvpTime" min="15" max="180" step="5" value="90" />
+          </div>
+        </div>
+        <div class="field">
+          <label>内置引擎强度 <output id="pvpStrengthOut">100%</output></label>
+          <input type="range" id="pvpStrength" min="20" max="100" step="5" value="100" />
+          <p class="hint">仅在使用「内置引擎」时生效；用于评测时建议调到 100%。</p>
+        </div>
+        <label class="check"><input type="checkbox" id="pvpTempToggle" /> 使用非零温度（更有变化，默认 0）</label>
+        <label class="check"><input type="checkbox" id="pvpHint" checked /> 给模型候选点提示</label>
+        <label class="check"><input type="checkbox" id="pvpReason" checked /> 要求模型给出一句简短理由</label>
+        <label class="check"><input type="checkbox" id="pvpAutoNext" checked /> 三局两胜时自动开始下一局</label>
+      </details>
+
+      <button class="btn btn-primary btn-block" id="btnStartPvp">开始对战</button>
+      <button class="btn btn-ghost btn-block" id="btnStopPvp" hidden>停止</button>
+    </div>
+
+    <!-- ---------- 说明 ---------- -->
+    <div class="panel card" data-panel="guide">
+      <h3 class="panel-title">它是怎么让"普通语言模型"下棋的？</h3>
+      <ol class="steps">
+        <li><b>每回合重画棋盘</b>：把 15×15 局面渲染成 ASCII 图（X/O/.），连同坐标体系（列 A-O、行 1-15）一起发给模型。</li>
+        <li><b>给出规则与优先级</b>：能赢就赢 → 对手四连必堵 → 防活三 → 做自己的活三/活四。</li>
+        <li><b>限定输出格式</b>：只准输出 <code>MOVE: H8</code>，避免废话。</li>
+        <li><b>容错解析 + 重试</b>：支持 <code>MOVE: H8</code>、<code>H8</code>、<code>{"row":8,"col":8}</code>、<code>(8,8)</code> 等多种写法；解析出非法点会自动把原因回传给模型重试一次；仍失败则由内置引擎兜底，不会卡住对局。</li>
+        <li><b>可选候选点提示</b>：把引擎算出的 Top5 候选点放进 prompt，弱模型棋力会明显提升（可在高级参数里关闭以做"纯净评测"）。</li>
+      </ol>
+
+      <h3 class="panel-title">预设供应商</h3>
+      <div class="provider-list" id="providerList"></div>
+
+      <h3 class="panel-title">常见问题</h3>
+      <dl class="faq">
+        <dt>为什么需要跑本地服务？</dt>
+        <dd>浏览器直连各家 API 会被 CORS 拦截，且 Anthropic 协议不兼容 OpenAI 格式。本地服务只做转发，不存储你的 Key。</dd>
+        <dt>模型老是下到已有棋子上？</dt>
+        <dd>开启"候选点提示"，或换更强/更新的模型；连续失败会触发内置引擎兜底。</dd>
+        <dt>想接没列出的模型？</dt>
+        <dd>选"自定义（OpenAI 兼容）"，填任意 Base URL + Key + 模型名即可，包括 Ollama、vLLM、OneAPI、LiteLLM 等自建网关。</dd>
+      </dl>
+    </div>
+
+    <!-- ---------- 对局日志（常驻） ---------- -->
+    <div class="panel card log-panel">
+      <h3 class="panel-title">对局日志<button class="btn btn-mini" id="btnClearLog">清空</button></h3>
+      <div class="log" id="log"><div class="log-empty">还没有记录。开始一局后，模型的每一次思考都会显示在这里。</div></div>
+    </div>
+  </aside>
+</main>
+
+<datalist id="modelList"></datalist>
+
+<footer class="foot">
+  <span>Gomoku Arena · 本地运行 · Node 18+</span>
+  <span id="health">服务状态检测中…</span>
+</footer>
+
+<script src="providers.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

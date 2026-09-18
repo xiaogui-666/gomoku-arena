@@ -1,0 +1,16 @@
+{
+  "name": "gomoku-arena",
+  "version": "1.0.0",
+  "description": "五子棋 AI 模型在线评测平台：人机对战 + 双模型对战（单局/三局两胜），零第三方依赖",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node selftest.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["gomoku", "five-in-a-row", "llm", "arena", "五子棋", "大模型评测"],
+  "license": "MIT"
+}
