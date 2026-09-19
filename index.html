@@ -606,7 +606,11 @@ const LS_KEY = 'gomoku-arena-v1';
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ saved = {}; }
 function defaultCfg(providerId){ return { providerId: providerId||'demo', model:'', apiKey:'', baseUrl:'', temperature:0.3 }; }
-function loadSlot(key){ const c = saved[key]; if(!c) return defaultCfg(); return Object.assign(defaultCfg(), c); }
+function loadSlot(key){
+  // 对战引擎按标签 A/B 读槽位，界面保存到 battleA/battleB，这里做统一映射
+  if(key==='A'||key==='B') key = 'battle'+key;
+  const c = saved[key]; if(!c) return defaultCfg(); return Object.assign(defaultCfg(), c);
+}
 function persist(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(saved)); }catch(e){} }
 function provName(cfg){ const p = P_MAP[cfg.providerId] || P_MAP.custom; return p.name + (p.adapter!=='demo' && cfg.model ? ' · ' + cfg.model : ''); }
 
