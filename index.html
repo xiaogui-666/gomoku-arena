@@ -230,7 +230,7 @@
           </div>
         </div>
         <button class="btn primary" id="startBattle" style="width:100%">开始对战</button>
-        <div class="hint">模型每回合收到文本棋盘与坐标协议（如 H8），输出经容错解析与自动重试；无效着法会计入统计并改用随机着法兜底。请求由你的浏览器直接发往模型厂商。</div>
+        <div class="hint">模型每回合收到文本棋盘，需输出 JSON 如 {"move":"H8"}；输出经容错解析、就近合法化与自动重试，无效或调用失败时改用启发式着法兜底并计入统计。请求由你的浏览器直接发往模型厂商。</div>
       </div>
     </div>
 
@@ -324,12 +324,6 @@ function checkWinAt(board, r, c, p){
   }
   return false;
 }
-function randomLocalMove(board){
-  const legal=[];
-  for(let r=0;r<SIZE;r++)for(let c=0;c<SIZE;c++)if(board[r][c]===0)legal.push({r,c});
-  return legal[Math.floor(Math.random()*legal.length)] || {r:7,c:7};
-}
-
 /* ================= 内置演示模型（启发式棋手） ================= */
 function lineScore(board, r, c, p){
   const dirs=[[1,0],[0,1],[1,1],[1,-1]];
@@ -363,6 +357,23 @@ function demoBotMove(board, player){
   if(!best) return {r:7,c:7};
   return best;
 }
+// 启发式最佳着法（模型调用失败/无效时的兜底，替代纯随机，观感显著更好）
+function bestLocalMove(board, player){ return demoBotMove(board, player); }
+// 就近合法化：模型坐标被占时，在 8 邻域内找评分最高的空点（容忍模型行列数偏一格的常见错误）
+function snapToLegal(board, parsed, player){
+  const r = parsed.r, c = parsed.c;
+  if(board[r] && board[r][c]===0) return { r, c };
+  let best = null, bestScore = -Infinity;
+  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+    if(!dr&&!dc) continue;
+    const nr=r+dr, nc=c+dc;
+    if(nr<0||nr>=SIZE||nc<0||nc>=SIZE||board[nr][nc]!==0) continue;
+    const score = lineScore(board, nr, nc, player) + (7-Math.abs(nr-7))*0.1 + (7-Math.abs(nc-7))*0.1;
+    if(score>bestScore){ bestScore=score; best={r:nr,c:nc}; }
+  }
+  if(best) return { r:best.r, c:best.c };
+  return null;
+}
 
 /* ================= 提示词构建（移植自服务端 lib/prompt.js） ================= */
 function boardDiagram(board){
@@ -385,31 +396,32 @@ function buildMessagesBrowser({ moves, next, attempt, lastRaw, lastError }){
     '你是一个五子棋对弈引擎，正在参加一场 15×15 棋盘上的评测对局。',
     '规则：黑白双方轮流在空白交叉点落子，先连成五子（横/竖/斜均可）的一方获胜。',
     '',
-    `你执${colorName}棋（${stoneSym}）。每回合你会收到完整棋盘状态，请给出你这一手的落子坐标。`,
+    `你执${colorName}棋（${stoneSym}）。每回合只允许你走一步，绝不能替对方走棋。`,
     '',
     '输出要求（务必严格遵守）：',
-    '1. 只输出一个坐标，格式为「列字母 + 行数字」，例如 H8。',
+    `1. 只输出一个 JSON 对象：{"move":"H8"}，H8 是你这一手的坐标（列字母+行数字）。`,
     '2. 列用大写字母 A–O（A 为最左列），行用数字 1–15（1 为最上行）。',
     '3. 只能落在空白交叉点，不能落在已有棋子的位置。',
-    '4. 不要输出任何解释、思考过程、棋谱编号、引号或多余文字。输出不合规将被判为无效着法。',
+    '4. 只输出你这方的一步，禁止给出对手的着法，禁止输出两个及以上坐标。',
+    '5. 不要输出任何解释、思考过程、棋谱编号或多余文字。输出不合规将被判为无效着法。',
   ].join('\n');
   const user = [
     `第 ${moves.length + 1} 手，轮到你（${colorName}，${stoneSym}）落子。`,
-    '棋盘状态（●=黑，○=白，·=空）：',
+    '棋盘状态（●=黑，○=白，·=空；行号在左，列号在下方）：',
     '```',
     boardDiagram(board),
     '```',
     moves.length
       ? `已有落子：${moves.map((m,i)=>`${i+1}. ${coordLabel(m.r,m.c)} ${m.p===1?'●':'○'}`).join('，')}`
       : '棋盘为空，你是先手。',
-    '请只输出你这一手的坐标（例如 H8）。',
+    '请只输出你这一手的 JSON，例如 {"move":"H8"}。',
   ].join('\n');
   const messages = [
     { role:'system', content: system },
     { role:'user', content: user },
   ];
   if(attempt > 1){
-    messages.push({ role:'user', content:`你上一次的输出「${String(lastRaw||'').slice(0,100)}」无效（${lastError||'格式错误'}）。请只输出一个空白交叉点的坐标，格式如 H8，不要输出任何其他内容。` });
+    messages.push({ role:'user', content:`你上一次的输出「${String(lastRaw||'').slice(0,100)}」无效（${lastError||'格式错误'}）。请只输出一个 JSON 对象 {"move":"坐标"}，坐标必须是空白交叉点，禁止输出对手着法或多个坐标，不要输出任何其他内容。` });
   }
   return messages;
 }
@@ -468,6 +480,11 @@ function parseMoveBrowser(raw){
   if(!text) return { ok:false, reason:'模型未输出任何内容' };
   const j = tryJson(text);
   if(j) return j;
+  // 检测"输出了多个坐标"（模型常把对手着法也说出来）→ 直接判无效并提示，避免取了对手那手
+  const coords = text.match(/([a-o])\s*[-–—~]?\s*(\d{1,2})/gi);
+  if(coords && coords.length > 1){
+    return { ok:false, reason:`输出了 ${coords.length} 个坐标（${coords.slice(0,3).map(x=>x.toUpperCase()).join('、')}…），只允许一个` };
+  }
   const m2 = text.match(/([a-o])\s*[-–—~]?\s*(\d{1,2})/i);
   if(m2){
     const c = m2[1].toLowerCase().charCodeAt(0)-97;
@@ -571,7 +588,7 @@ async function callModel(cfg, messages, timeoutMs){
 async function getMoveBrowser({ moves, next, config }){
   const maxAttempts = 3, timeoutMs = 60000;
   moves = Array.isArray(moves) ? moves : [];
-  if(moves.length >= SIZE*SIZE) return { ok:true, move: randomLocalMove(emptyBoard()), fallback:true, fallbackReason:'board-full', attempts:0, latencyMs:0 };
+  if(moves.length >= SIZE*SIZE) return { ok:true, move: bestLocalMove(emptyBoard(), next), fallback:true, fallbackReason:'board-full', attempts:0, latencyMs:0 };
   const board = buildBoardFromMoves(moves);
   let invalid = null, attempts = 0, apiErrors = 0;
   for(let i=0;i<maxAttempts;i++){
@@ -587,18 +604,22 @@ async function getMoveBrowser({ moves, next, config }){
     if(apiError){
       apiErrors++;
       if(apiErrors>=2){
-        return { ok:true, move: randomLocalMove(board), fallback:true, fallbackReason:'api-error', error: String(apiError && apiError.message || apiError), errorStatus: apiError && apiError.status, attempts, latencyMs: Math.round(performance.now()-t0) };
+        return { ok:true, move: bestLocalMove(board, next), fallback:true, fallbackReason:'api-error', error: String(apiError && apiError.message || apiError), errorStatus: apiError && apiError.status, attempts, latencyMs: Math.round(performance.now()-t0) };
       }
       continue;
     }
     const latencyMs = Math.round(performance.now()-t0);
     const parsed = parseMoveBrowser(text);
-    if(parsed.ok && board[parsed.r] && board[parsed.r][parsed.c]===0){
-      return { ok:true, move:{ r:parsed.r, c:parsed.c }, raw:text, attempts, latencyMs, parseFormat: parsed.format };
+    if(parsed.ok){
+      // 目标被占时自动就近合法化（容忍模型行列数偏一格的常见错误）
+      const target = snapToLegal(board, parsed, next);
+      if(target) return { ok:true, move: target, raw:text, attempts, latencyMs, parseFormat: parsed.format };
+      invalid = { raw: text.slice(0,120), reason:'目标点已被占据且附近无空点' };
+    } else {
+      invalid = { raw: text.slice(0,120), reason: parsed.reason };
     }
-    invalid = { raw: text.slice(0,120), reason: parsed.reason };
   }
-  return { ok:true, move: randomLocalMove(board), fallback:true, fallbackReason: invalid ? ('invalid-parse:'+invalid.reason) : 'unknown', lastRaw: invalid && invalid.raw, attempts, latencyMs:0 };
+  return { ok:true, move: bestLocalMove(board, next), fallback:true, fallbackReason: invalid ? ('invalid-parse:'+invalid.reason) : 'unknown', lastRaw: invalid && invalid.raw, attempts, latencyMs:0 };
 }
 
 /* ================= 配置块渲染 ================= */
@@ -867,6 +888,7 @@ function endGame(winner){
 }
 
 async function aiTurn(){
+  const myGen = S.gen;
   const p = S.current;
   const cfg = cfgOf(p);
   const label = cfgLabelOf(p);
@@ -900,7 +922,18 @@ async function aiTurn(){
     }
   }
   meta.latency = Math.round(performance.now() - t0);
-  if(meta.apiErr) toast(('模型调用失败：' + meta.apiErr).slice(0,160) + '，本手已用随机着法兜底', 'err');
+  if(meta.apiErr) toast(('模型调用失败：' + meta.apiErr).slice(0,160) + '，本手已用启发式着法兜底', 'err');
+  // 竞态防护：思考期间对局被重置/切换/结束（如点了新开局、切模式）→ 丢弃这手，防止乱落子
+  if(S.gen!==myGen || S.over){
+    setThinking(false);
+    renderStatus();
+    return;
+  }
+  // 防御：落点已非空（异常竞态）→ 改用启发式合法着法
+  if(move && (!S.board[move.r] || S.board[move.r][move.c]!==0)){
+    move = bestLocalMove(S.board, p);
+    meta.invalid = 1;
+  }
   setThinking(false);
   if(move) applyMove(move.r, move.c, p, meta, label);
   renderStatus();
